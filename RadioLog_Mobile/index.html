@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#102033"><title>RadioLog Mobile F4MKO</title>
+<link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{color-scheme:dark;--bg:#0b1420;--panel:#142235;--muted:#a9bbd0;--blue:#1976c9}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#eef5ff;font:15px system-ui}
+header{padding:15px 16px;background:#102033;position:sticky;top:0;z-index:5}h1{font-size:21px;margin:0}header small{color:var(--muted)}
+nav{display:flex;gap:7px;overflow:auto;padding:9px;background:#0e1a29;position:sticky;top:59px;z-index:5}
+button{border:0;border-radius:10px;padding:11px 13px;background:#263d58;color:white;font-weight:650}
+button.primary{background:var(--blue)}.tab.active{background:var(--blue)}
+main{padding:11px;max-width:850px;margin:auto}.panel{background:var(--panel);padding:13px;border-radius:14px;margin-bottom:11px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.stats{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.stat strong{font-size:25px;display:block}label{display:block;color:var(--muted);font-size:13px;margin:8px 0 4px}
+input,select,textarea{width:100%;padding:11px;border-radius:9px;border:1px solid #38516d;background:#0d1927;color:white;font:inherit}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.hidden{display:none}.muted,.notice{color:var(--muted)}.notice{font-size:13px;line-height:1.45}
+#map{height:57vh;min-height:320px;border-radius:10px}.tablewrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:8px;border-bottom:1px solid #30445c;text-align:left}
+@media(max-width:420px){.grid{grid-template-columns:1fr 1fr}main{padding:8px}}
+</style></head><body>
+<header><h1>📻 RadioLog Mobile</h1><small>F4MKO · IN98WV</small></header>
+<nav><button class="tab active" data-tab="home">Accueil</button><button class="tab" data-tab="add">Ajouter QSO</button><button class="tab" data-tab="mapview">Carte</button><button class="tab" data-tab="log">Journal</button></nav>
+<main>
+<section id="home" class="view">
+<div class="stats"><div class="panel stat"><span class="muted">QSO</span><strong id="count">0</strong></div><div class="panel stat"><span class="muted">Indicatifs</span><strong id="unique">0</strong></div></div>
+<div class="panel"><h2>Bienvenue, F4MKO</h2><p class="notice">Version mobile initiale. Les contacts sont conservés sur ce téléphone. Exporte régulièrement ton ADIF pour sauvegarder tes données.</p><div class="actions"><button class="primary" onclick="tab('add')">＋ Ajouter un QSO</button><button onclick="tab('mapview')">Carte mondiale</button></div></div>
+<div class="panel"><h3>Import / Export ADIF</h3><input type="file" id="adifFile" accept=".adi,.adif,.txt"><div class="actions"><button onclick="importADIF()">Importer ADIF</button><button onclick="exportADIF()">Exporter ADIF</button></div></div>
+</section>
+<section id="add" class="view hidden"><div class="panel"><h2>Nouveau QSO</h2><div class="grid">
+<div><label>Indicatif</label><input id="call" placeholder="F4XXX" autocapitalize="characters"></div>
+<div><label>Date</label><input id="date" type="date"></div>
+<div><label>Heure UTC</label><input id="time" type="time"></div>
+<div><label>Bande</label><select id="band"><option>20m</option><option>160m</option><option>80m</option><option>40m</option><option>30m</option><option>17m</option><option>15m</option><option>12m</option><option>10m</option><option>6m</option><option>2m</option><option>70cm</option></select></div>
+<div><label>Mode</label><select id="mode"><option>SSB</option><option>CW</option><option>FT8</option><option>FT4</option><option>FM</option><option>AM</option><option>RTTY</option><option>PSK31</option></select></div>
+<div><label>Fréquence MHz</label><input id="freq" placeholder="14.200"></div>
+<div><label>RST envoyé</label><input id="rstS" value="59"></div><div><label>RST reçu</label><input id="rstR" value="59"></div>
+<div><label>Locator</label><input id="grid" placeholder="JN18AA" autocapitalize="characters"></div><div><label>QTH / Nom</label><input id="qth"></div>
+</div><label>Commentaire</label><textarea id="comment" rows="2"></textarea><div class="actions"><button class="primary" onclick="addQSO()">Enregistrer le QSO</button></div>
+<p class="notice">Saisis le locator du correspondant pour le placer sur la carte. La recherche automatique HamQTH nécessite une connexion serveur sécurisée : ne mets pas ton mot de passe dans cette page.</p></div></section>
+<section id="mapview" class="view hidden"><div class="panel"><h2>Carte mondiale des QSO</h2><p class="notice">Une ligne est dessinée pour chaque QSO avec locator valide. Internet est nécessaire pour le fond cartographique.</p><div id="map"></div></div></section>
+<section id="log" class="view hidden"><div class="panel"><h2>Journal</h2><div class="tablewrap"><table><thead><tr><th>Indicatif</th><th>Date</th><th>Bande</th><th>Mode</th><th>Locator</th><th></th></tr></thead><tbody id="rows"></tbody></table></div></div></section>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const KEY='radiolog_mobile_f4mko_v1';let qsos=JSON.parse(localStorage.getItem(KEY)||'[]'),map,lines;
+function tab(id){document.querySelectorAll('.view').forEach(v=>v.classList.toggle('hidden',v.id!==id));document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===id));if(id==='mapview')setTimeout(drawMap,120)}
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
+function gridPos(s){s=(s||'').trim().toUpperCase();if(!/^[A-R]{2}[0-9]{2}([A-X]{2}([0-9]{2}([A-X]{2})?)?)?$/.test(s))return null;
+let lon=-180+(s.charCodeAt(0)-65)*20+Number(s[2])*2,lat=-90+(s.charCodeAt(1)-65)*10+Number(s[3]),w=2,h=1;
+if(s.length>=6){lon+=(s.charCodeAt(4)-65)*5/60;lat+=(s.charCodeAt(5)-65)*2.5/60;w=5/60;h=2.5/60}
+if(s.length>=8){lon+=Number(s[6])/12;lat+=Number(s[7])/24;w=1/12;h=1/24}
+if(s.length>=10){lon+=(s.charCodeAt(8)-65)/120;lat+=(s.charCodeAt(9)-65)/240;w=1/120;h=1/240}
+return [lat+h/2,lon+w/2]}
+function addQSO(){let c=val('call').toUpperCase().trim();if(!c){alert('Indique un indicatif.');return}
+qsos.push({id:Date.now()+Math.random(),call:c,date:val('date'),time:val('time'),band:val('band'),mode:val('mode'),freq:val('freq'),rstS:val('rstS'),rstR:val('rstR'),grid:val('grid').toUpperCase().trim(),qth:val('qth'),comment:val('comment')});
+save();document.getElementById('call').value='';document.getElementById('grid').value='';tab('log')}
+function val(id){return document.getElementById(id).value}
+function save(){localStorage.setItem(KEY,JSON.stringify(qsos));render()}
+function esc(x){return String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function render(){count.textContent=qsos.length;unique.textContent=new Set(qsos.map(q=>q.call)).size;rows.innerHTML=qsos.slice().reverse().map(q=>`<tr><td>${esc(q.call)}</td><td>${esc(q.date)}</td><td>${esc(q.band)}</td><td>${esc(q.mode)}</td><td>${esc(q.grid)}</td><td><button onclick="delQSO('${q.id}')">×</button></td></tr>`).join('')}
+function delQSO(id){if(confirm('Supprimer ce QSO ?')){qsos=qsos.filter(q=>String(q.id)!==String(id));save()}}
+function drawMap(){if(!window.L){document.getElementById('map').textContent='Carte indisponible : connexion Internet requise.';return}
+if(!map){map=L.map('map').setView([25,0],2);L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{attribution:'Tiles © Esri',maxZoom:18}).addTo(map);lines=L.featureGroup().addTo(map)}
+lines.clearLayers();let home=gridPos('IN98WV');L.marker(home).bindPopup('F4MKO · IN98WV').addTo(lines);
+qsos.forEach(q=>{let p=gridPos(q.grid);if(!p)return;L.polyline([home,p],{color:'#238cff',weight:2,opacity:.8}).bindPopup(`${esc(q.call)} · ${esc(q.date)} · ${esc(q.band)} · ${esc(q.mode)}`).addTo(lines);L.circleMarker(p,{radius:5}).bindPopup(`${esc(q.call)} (${esc(q.grid)})`).addTo(lines)})}
+function download(name,data){let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:'text/plain'}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+function exportADIF(){let out='Generated by RadioLog Mobile\n';qsos.forEach(q=>{let d=(q.date||'').replaceAll('-',''),t=(q.time||'').replace(':','');for(let [k,v] of Object.entries({CALL:q.call,QSO_DATE:d,TIME_ON:t,BAND:q.band,MODE:q.mode,FREQ:q.freq,RST_SENT:q.rstS,RST_RCVD:q.rstR,GRIDSQUARE:q.grid}))if(v)out+=`<${k}:${String(v).length}>${v}`;out+='<EOR>\n'});download('RadioLog_F4MKO.adi',out)}
+function importADIF(){let f=adifFile.files[0];if(!f){alert('Choisis un fichier ADIF.');return}let r=new FileReader();r.onload=()=>{let n=0;r.result.split(/<EOR>/i).forEach(rec=>{let o={},m,re=/<([A-Z0-9_]+):(\d+)(?:\s[A-Z])?>([^<]*)/gi;while((m=re.exec(rec))!==null)o[m[1].toUpperCase()]=m[3].slice(0,+m[2]);if(o.CALL){qsos.push({id:Date.now()+Math.random(),call:o.CALL,date:o.QSO_DATE?o.QSO_DATE.slice(0,4)+'-'+o.QSO_DATE.slice(4,6)+'-'+o.QSO_DATE.slice(6,8):'',time:o.TIME_ON||'',band:o.BAND||'',mode:o.MODE||'',freq:o.FREQ||'',rstS:o.RST_SENT||'',rstR:o.RST_RCVD||'',grid:o.GRIDSQUARE||'',qth:'',comment:''});n++}});save();alert(n+' QSO importés')};r.readAsText(f)}
+date.value=new Date().toISOString().slice(0,10);time.value='12:00';render();
+if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
+</script></body></html>

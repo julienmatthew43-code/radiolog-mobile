@@ -1,0 +1,16 @@
+RadioLog Mobile F4MKO — version initiale
+
+Installation sur Android :
+1. Décompressez ce ZIP.
+2. Hébergez le contenu du dossier RadioLog_Mobile sur un hébergement HTTPS (ex. GitHub Pages).
+3. Ouvrez l'adresse HTTPS dans Chrome sur Android.
+4. Menu ⋮ > Installer l'application (ou Ajouter à l'écran d'accueil).
+
+Fonctions : saisie QSO, journal local, import/export ADIF, carte avec lignes par QSO si le locator est disponible.
+
+Limites :
+- La carte et Leaflet nécessitent Internet.
+- Les QSO sont stockés dans le navigateur de ce téléphone ; exporter ADIF régulièrement.
+- Cette version n'inclut pas encore la recherche automatique HamQTH ni la synchronisation PC/mobile.
+- Ne saisissez jamais le mot de passe HamQTH dans cette page. Il faudra un petit backend sécurisé pour l'API HamQTH.
+- La synchronisation entre le logiciel Windows et le téléphone n'est pas encore implémentée.
